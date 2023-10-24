@@ -1,4 +1,4 @@
-# argocd-ext-installer
+# Argo CD Extension Installer
 
 This repo provides a docker image that can be used as an init
 container to install Argo CD extensions.
