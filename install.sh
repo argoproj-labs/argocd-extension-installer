@@ -50,9 +50,9 @@ install_extension() {
     echo "Installing the UI extension..."
     cd $download_dir
     local mime_type=$(file --mime-type "$ext_filename" | awk '{print $2}')
-    if [[ "$mime_type" == "application/gzip" ]]; then
+    if [ "$mime_type" = "application/gzip" ]; then
         tar -zxf $ext_filename
-    elif [[ "$mime_type" == "application/x-tar" ]]; then
+    elif [ "$mime_type" = "application/x-tar" ]; then
         tar -xf $ext_filename
     else
         echo "error: unsupported extension archive: $mime_type"
@@ -77,7 +77,7 @@ fi
 ext_name="${EXTENSION_NAME:-}"
 ext_version="${EXTENSION_VERSION:-}"
 ext_url="${EXTENSION_URL:-}"
-if [ "$ext_url" == "" ]; then
+if [ "$ext_url" = "" ]; then
     echo "error: the env var EXTENSION_URL must be provided"
     exit 1
 fi
