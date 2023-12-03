@@ -69,12 +69,13 @@ install_extension() {
 
 ## Script
 ext_enabled="${EXTENSION_ENABLED:-true}"
+ext_name="${EXTENSION_NAME:-}"
+
 if [ "$ext_enabled" != "true" ]; then
-    echo "Metrics extension is disabled"
+    echo "$ext_name extension is disabled"
     exit 0
 fi
 
-ext_name="${EXTENSION_NAME:-}"
 ext_version="${EXTENSION_VERSION:-}"
 ext_url="${EXTENSION_URL:-}"
 if [ "$ext_url" = "" ]; then
