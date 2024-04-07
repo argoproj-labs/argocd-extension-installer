@@ -2,11 +2,12 @@ name: Docker Image Build and Publish
 
 on:
   push:
-    branches: [ "main" ]
+    tags:
+    - 'v*'
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: quay.io
+  IMAGE_NAME: argoprojlabs/${{ github.repository }}
 
 jobs:
   build-and-push-image:
@@ -37,8 +38,8 @@ jobs:
       uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3
       with:
         registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        username: ${{ env.QUAY_USERNAME }}
+        password: ${{ env.QUAY_TOKEN }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5
