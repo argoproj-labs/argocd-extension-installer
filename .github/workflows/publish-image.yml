@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: quay.io
-  IMAGE_NAME: argoprojlabs/${{ github.repository }}
+  IMAGE_NAME: argoprojlabs/argocd-extension-installer
 
 jobs:
   build-and-push-image:
