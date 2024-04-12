@@ -19,7 +19,7 @@ finalizer() {
     fi
     code=$?
     if [ $code -ne 0 ]; then
-        echo "ERROR: failed to install metrics extension: error code: $code"
+        echo "ERROR: failed to install $ext_name extension: error code: $code"
     fi
     end_time=$(uptime_ms)
     elapsed=$(( end_time-start_time ))
