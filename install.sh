@@ -84,6 +84,10 @@ if [ "$ext_url" = "" ]; then
 fi
 checksum_url="${EXTENSION_CHECKSUM_URL:-}"
 download_max_sec="${MAX_DOWNLOAD_SEC:-30}"
+
+vars="${VARS:-}"
+echo "$vars" | jq '.' > /tmp/extensions/resources/$ext_filename/vars.json
+
 ext_filename=$(basename -- "$ext_url")
 download_dir=`mktemp -d -t extension-XXXXXX`
 ext_file="$download_dir/$ext_filename"
