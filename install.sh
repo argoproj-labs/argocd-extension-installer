@@ -28,6 +28,7 @@ finalizer() {
 }
 trap finalizer EXIT
 
+
 # will download the extension respecting the max download
 # duration setting
 download_extension() {
@@ -63,7 +64,15 @@ install_extension() {
         mkdir -p /tmp/extensions/resources
     fi
     cp -Rf resources/* /tmp/extensions/resources/
+
+    if [ -n "$vars" ] && [ "$vars" != "null" ]; then
+     echo "Installing extension vars"
+      json_vars=$(printf '%s\n' "$vars" | jq -R . | jq -s .)
+      echo "Exporting extension vars  to path $ext_vars_file_path/$ext_vars_file_name.json"
+      echo "$json_vars" > "$ext_vars_file_path/$ext_vars_file_name.json"
+    fi
     echo "UI extension installed successfully"
+
 }
 
 
@@ -85,14 +94,17 @@ fi
 checksum_url="${EXTENSION_CHECKSUM_URL:-}"
 download_max_sec="${MAX_DOWNLOAD_SEC:-30}"
 
-vars="${VARS:-}"
-echo "$vars" | jq '.' > /tmp/extensions/resources/$ext_filename/vars.json
-
 ext_filename=$(basename -- "$ext_url")
 download_dir=`mktemp -d -t extension-XXXXXX`
 ext_file="$download_dir/$ext_filename"
 if [ -f $ext_file ]; then
     rm $ext_file
 fi
+
+vars=$(echo "$EXTENSION_VARS" | jq -c '.')
+ext_vars_file_name="${EXTENSION_VARS_FILE_NAME:-}"
+ext_vars_file_path="${EXTENSION_VARS_FILE_PATH:-}"
+
+
 download_extension
 install_extension
