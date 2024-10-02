@@ -28,7 +28,6 @@ finalizer() {
 }
 trap finalizer EXIT
 
-
 # will download the extension respecting the max download
 # duration setting
 download_extension() {
@@ -65,16 +64,29 @@ install_extension() {
     fi
     cp -Rf resources/* /tmp/extensions/resources/
 
-    if [ -n "$vars" ] && [ "$vars" != "null" ]; then
-     echo "Installing extension vars"
-      json_vars=$(printf '%s\n' "$vars" | jq -R . | jq -s .)
-      echo "Exporting extension vars  to path $ext_vars_file_path/$ext_vars_file_name.json"
-      echo "$json_vars" > "$ext_vars_file_path/$ext_vars_file_name.json"
+    if [ -n "$ext_vars" ] && [ -n "$ext_name" ]; then
+        create_extension_js_file_with_vars
     fi
+
     echo "UI extension installed successfully"
 
 }
 
+create_extension_js_file_with_vars() {
+  echo "Generating extension vars js file..."
+  ext_installed_path=$(find /tmp/extensions/resources -type d -name "extension*-$ext_name*.js" | head -n 1)
+  sanitized_extension_name=$(echo "${ext_name//-/_}" | tr '[:lower:]' '[:upper:]')
+  ext_js_file_name="${sanitized_extension_name}_vars"
+  js_file_path="${ext_installed_path}/extension-0-${ext_js_file_name}.js"
+  js_variable=$(echo "$ext_vars" | jq -r 'to_entries | map("\"" + (.key | ascii_upcase) + "\": \"" + .value + "\"") | join(", ")')
+  js_vars_wrap="((window) => { const vars = { $js_variable }; window.${sanitized_extension_name}_VARS = vars; })(window);"
+  if [ -d "$ext_installed_path" ]; then
+      echo "Exporting extension vars file at $js_file_path"
+      echo "$js_vars_wrap" > "$js_file_path"
+  else
+      echo "$ext_installed_path path doesn't exist, extension vars failed to be exported "
+  fi
+}
 
 ## Script
 ext_enabled="${EXTENSION_ENABLED:-true}"
@@ -101,10 +113,8 @@ if [ -f $ext_file ]; then
     rm $ext_file
 fi
 
-vars=$(echo "$EXTENSION_VARS" | jq -c '.')
-ext_vars_file_name="${EXTENSION_VARS_FILE_NAME:-}"
-ext_vars_file_path="${EXTENSION_VARS_FILE_PATH:-}"
-
+ext_vars=$(echo "$EXTENSION_JS_VARS" | jq -c '.')
 
 download_extension
 install_extension
+

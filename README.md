@@ -11,18 +11,15 @@ and install the configured UI extension. All configuration is provided
 as environment variables as part of the init container. Find below the
 list of all environment variables that can be configured:
 
-| Env Var                  | Required? | Default | Description                                                                                                                                                                                                                                 |
-|--------------------------|-----------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| EXTENSION_NAME           | Yes       | ""      | Extension Name                                                                                                                                                                                                                              |
-| EXTENSION_ENABLED        | No        | true    | If set to false will skip the installation. Noop                                                                                                                                                                                            |
-| EXTENSION_URL            | Yes       | ""      | Must be set to a valid URL where the UI extension can be downloaded from. <br>Argo CD API server needs to have network access to this URL.                                                                                                  |
-| EXTENSION_VERSION        | Yes       | ""      | The version of the extension to be installed.                                                                                                                                                                                               |
-| EXTENSION_CHECKSUM_URL   | No        | ""      | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.                                  |
-| MAX_DOWNLOAD_SEC         | No        | 30      | Total time in seconds allowed to download the extension.                                                                                                                                                                                    |
-| EXTENSION_VARS           | No        | ""      | Specifies the variables to be exported in $EXTENSION_VARS_FILE_NAME in json format within the extension folder. These variables serve as external configurations for the extension. <br/>The format should be `{key1=value1, key2=value2}`. |
-| EXTENSION_VARS_FILE_NAME | No        | 'vars'  | Specifies the file name where the variables will be exported. The default is 'vars', but you can provide your own file name, e.g., 'Metrics'.                                                                                               |
-| EXTENSION_VARS_FILE_PATH | No        | ""      | Specifies the path where the variables will be exported. For example, you can use a path like '/tmp/extensions/resources/extension-{EXTENSION_VARS_FILE_NAME}.js'.                                                                          |
-
+| Env Var                   | Required? | Default   | Description                                                                                                                                                                                                         |
+|---------------------------|----------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| EXTENSION_NAME            | Yes      | ""        | Extension Name                                                                                                                                                                                                      |
+| EXTENSION_ENABLED         | No       | true      | If set to false will skip the installation. Noop                                                                                                                                                                    |
+| EXTENSION_URL             | Yes      | ""        | Must be set to a valid URL where the UI extension can be downloaded from. <br>Argo CD API server needs to have network access to this URL.                                                                          |
+| EXTENSION_VERSION         | Yes      | ""        | The version of the extension to be installed.                                                                                                                                                                       |
+| EXTENSION_CHECKSUM_URL    | No       | ""        | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.          |
+| MAX_DOWNLOAD_SEC          | No       | 30        | Total time in seconds allowed to download the extension.                                                                                                                                                            |
+| EXTENSION_JS_VARS      | No       | ""        | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
     
 
 
@@ -30,21 +27,20 @@ list of all environment variables that can be configured:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: argocd-extension-cm
+  name: extension-cm
 data:
  extension.url: 'http://example.com/extension.tar.gz'
  extension.version: 'v0.3.1'
+ # optional fields
+ extension.name: 'example'
  extension.enabled: 'true'
  extension.checksum_url: 'http://example.com/extension_checksums.txt'
  extension.max_download_sec: '30'
- extension.vars: |
+ extension.js_vars : |
      {
        "key1": "value1",
        "key2": "value2"
      }
- extension.vars_file_name: 'vars'
- extension.vars_file_path: '/tmp/extensions/resources/extension-<EXTENSION_VARS_FILE_NAME>.js'
-
 
 ```
 
@@ -68,33 +64,28 @@ spec:
             valueFrom:
               configMapKeyRef:
                 key: extension.name
-                name: argocd-extension-cm
+                name: extension-cm
           - name: EXTENSION_URL
             valueFrom:
              configMapKeyRef:
               key: extension.url
-              name: argocd-extension-cm
+              name: extension-cm
           - name: EXTENSION_VERSION
             valueFrom:
              configMapKeyRef:
               key: extension.version
-              name: argocd-extension-cm
+              name: extension-cm
+          - name: EXTENSION_CHECKSUM_URL
+            valueFrom:
+              configMapKeyRef:
+                key: extension.checksum_url
+                name: extension-cm
             ## Optional fields
-          - name: EXTENSION_VARS
+          - name: $EXTENSION_JS_VARS
             valueFrom:
              configMapKeyRef:
-              key: extension.vars
-              name: argocd-extension-cm
-          - name: EXTENSION_VARS_FILE_NAME
-            valueFrom:
-             configMapKeyRef:
-              key: extension.vars_file_name
-              name: argocd-extension-cm
-          - name: EXTENSION_VARS_FILE_PATH
-            valueFrom:
-             configMapKeyRef:
-              key: extension.vars_file_path
-              name: argocd-extension-cm
+              key: extension.js_vars
+              name: extension-cm
           volumeMounts:
             - name: extensions
               mountPath: /tmp/extensions/
@@ -107,3 +98,46 @@ spec:
             - name: extensions
               mountPath: /tmp/extensions/
 ```
+
+### Exporting env as js extensions
+
+Add the below config in the `extension-cm`:
+```yaml
+#name should match with the extension name e.g 'Metrics', 'Rollout', 'Ephemeral-Access'
+extension.name: 'example'
+extension.js_vars : |
+     {
+       "key1": "value1",
+       "key2": "value2"
+     }
+```
+Provide the config in argocd-server deployment as below:
+```yaml
+ ## Optional fields
+  - name: $EXTENSION_JS_VARS
+    valueFrom:
+     configMapKeyRef:
+      key: extension.js_vars
+      name: extension-cm
+```
+output:
+```js
+((window) => {
+    const vars = {
+        "key1": "value1",  "key2": "value2"
+    };
+    window.EXAMPLE_VARS = vars;
+})(window);
+```
+
+Use the exported variables in the extension js file as below:
+```js
+console.log(window.EXAMPLE_VARS.key1);
+console.log(window.EXAMPLE_VARS.key2);
+```
+
+Debug:
+```text
+To test the exported env variables, open the developer console in the browser and type `window` to see the exported variables. The output should be similar to the below:
+```
+![imge](./image/exported_envirnoment_variables.png)
