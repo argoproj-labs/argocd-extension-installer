@@ -20,8 +20,54 @@ list of all environment variables that can be configured:
 | EXTENSION_CHECKSUM_URL    | No       | ""        | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.          |
 | MAX_DOWNLOAD_SEC          | No       | 30        | Total time in seconds allowed to download the extension.                                                                                                                                                            |
 | EXTENSION_JS_VARS      | No       | ""        | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
-    
 
+
+# Examples
+
+## Simple
+
+The simplest way to use this installer is configuring a patch in Argo
+CD API server adding an additional initContainer for each extension to
+be installed. The example below shows how to configure a hypothetical
+extension just providing the required fields.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-server
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: extension-
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.5@sha256:27e72f047298188e2de1a73a1901013c274c4760c92f82e6e46cd5fbd0957c6b
+          env:
+          - name: EXTENSION_URL
+            value: https://github.com/some-org/somerepo/releases/download/v0.0.1/extension.tar
+          volumeMounts:
+            - name: extensions
+              mountPath: /tmp/extensions/
+          securityContext:
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+      containers:
+        - name: argocd-server
+          volumeMounts:
+            - name: extensions
+              mountPath: /tmp/extensions/
+```
+
+> [!NOTE]
+> It is a good practice to appended the image digest after the tag to ensure a deterministic and safe image pulling.
+> The tag digest can be obtained in quay by clicking in the "fetch tag" icon and select "Docker Pull (by digest)":
+> https://quay.io/repository/argoprojlabs/argocd-extension-installer?tab=tags
+
+## Using ConfigMap
+
+The example below demonstrates how to define all extension
+configuration in a ConfigMap and use it to configure and update Argo
+CD extensions.
 
 ```yaml
 apiVersion: v1
@@ -29,19 +75,18 @@ kind: ConfigMap
 metadata:
   name: extension-cm
 data:
- extension.url: 'http://example.com/extension.tar.gz'
- extension.version: 'v0.3.1'
- # optional fields
- extension.name: 'example'
- extension.enabled: 'true'
- extension.checksum_url: 'http://example.com/extension_checksums.txt'
- extension.max_download_sec: '30'
- extension.js_vars : |
-     {
-       "key1": "value1",
-       "key2": "value2"
-     }
-
+  extension.url: 'http://example.com/extension.tar.gz'
+  extension.version: 'v0.3.1'
+  # optional fields
+  extension.name: 'example'
+  extension.enabled: 'true'
+  extension.checksum_url: 'http://example.com/extension_checksums.txt'
+  extension.max_download_sec: '30'
+  extension.js_vars : |
+    {
+      "key1": "value1",
+      "key2": "value2"
+    }
 ```
 
 ```yaml
@@ -54,11 +99,7 @@ spec:
     spec:
       initContainers:
         - name: extension
-          # The image digest must be appended after the tag.
-          # New tag digest can be obtained in quay by clicking in the
-          # "fetch tag" icon and select "Docker Pull (by digest)":
-          # https://quay.io/repository/argoprojlabs/argocd-extension-installer?tab=tags
-          image: docker.intuit.com/quay-rmt/argoprojlabs/argocd-extension-installer:v0.0.1@sha256:f50fa11a4592f3fcdd5a137dab8ed32067bb779a77a393f179e8a5d96abe1a80
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.5@sha256:27e72f047298188e2de1a73a1901013c274c4760c92f82e6e46cd5fbd0957c6b
           env:
           - name: EXTENSION_NAME
             valueFrom:
@@ -99,9 +140,18 @@ spec:
               mountPath: /tmp/extensions/
 ```
 
-### Exporting env as js extensions
+## Configuring extension vars
 
-Add the below config in the `extension-cm`:
+Some UI extensions might require some configuration to be provided.
+This installer enables this requirement by automatically creating the
+necessary javascript file to expose the properties defined in the
+`EXTENSION_JS_VARS` variable.
+
+The example below shows how this can be achieved using the ConfigMap
+approach:
+
+Add the below configuration in the `extension-cm`:
+
 ```yaml
 #name should match with the extension name e.g 'Metrics', 'Rollout', 'Ephemeral-Access'
 extension.name: 'example'
@@ -111,7 +161,8 @@ extension.js_vars : |
        "key2": "value2"
      }
 ```
-Provide the config in argocd-server deployment as below:
+
+Provide the configuration in argocd-server deployment as below:
 ```yaml
  ## Optional fields
   - name: $EXTENSION_JS_VARS
@@ -119,8 +170,10 @@ Provide the config in argocd-server deployment as below:
      configMapKeyRef:
       key: extension.js_vars
       name: extension-cm
+
 ```
-output:
+
+The installer will create a file as follows:
 ```js
 ((window) => {
     const vars = {
@@ -137,7 +190,7 @@ console.log(window.EXAMPLE_VARS.key2);
 ```
 
 Debug:
-```text
+
 To test the exported env variables, open the developer console in the browser and type `window` to see the exported variables. The output should be similar to the below:
-```
-![imge](./image/exported_envirnoment_variables.png)
+
+![image](./image/exported_envirnoment_variables.png)
