@@ -113,7 +113,11 @@ if [ -f $ext_file ]; then
     rm $ext_file
 fi
 
-ext_vars=$(echo "$EXTENSION_JS_VARS" | jq -c '.')
+ext_vars="${EXTENSION_JS_VARS:-}"
+  if [ -n "${ext_vars}" ]; then
+   ext_vars=$(echo "$ext_vars" | jq -c '.')
+ fi
+
 
 download_extension
 install_extension
