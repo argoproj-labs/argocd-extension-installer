@@ -1,4 +1,4 @@
-FROM alpine:3.19.1
+FROM alpine:3.22.0
 
 ARG USER=ext-installer
 ENV HOME /home/$USER
@@ -9,6 +9,7 @@ RUN adduser -D $USER
 USER $USER
 WORKDIR $HOME
 
-ADD install.sh .
+COPY --chown=$USER:$USER install.sh .
+RUN chmod +x install.sh
 
 ENTRYPOINT ["./install.sh"]

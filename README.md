@@ -20,6 +20,7 @@ list of all environment variables that can be configured:
 | EXTENSION_CHECKSUM_URL    | No       | ""        | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.          |
 | MAX_DOWNLOAD_SEC          | No       | 30        | Total time in seconds allowed to download the extension.                                                                                                                                                            |
 | EXTENSION_JS_VARS      | No       | ""        | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
+| EXTENSION_GIT_TOKEN       | No       | ""        | Token used for authentication when downloading the extension from a private Git repository. The token will be used in an `Authorization` header.                                                                  |
 
 > [!IMPORTANT]
 > The tar file at `EXTENSION_URL` must contain a top-level directory named `resources` containing the extension js file. The file may be nested under additional directories. For example: `resources/my-extension/my-extension.js`.
@@ -43,7 +44,7 @@ spec:
     spec:
       initContainers:
         - name: extension-
-          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.5@sha256:27e72f047298188e2de1a73a1901013c274c4760c92f82e6e46cd5fbd0957c6b
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.9
           env:
           - name: EXTENSION_URL
             value: https://github.com/some-org/somerepo/releases/download/v0.0.1/extension.tar
@@ -64,6 +65,51 @@ spec:
 > It is a good practice to appended the image digest after the tag to ensure a deterministic and safe image pulling.
 > The tag digest can be obtained in quay by clicking in the "fetch tag" icon and select "Docker Pull (by digest)":
 > https://quay.io/repository/argoprojlabs/argocd-extension-installer?tab=tags
+
+### Using private repositories
+
+If your extension is hosted in a private Git repository, you can provide a Git access token using the `EXTENSION_GIT_TOKEN` environment variable. This token will be used to set an `Authorization` header when downloading the extension archive and optional checksum file.
+
+The token can be injected either through a ConfigMap or a Secret. It is recommended to use a Kubernetes Secret to avoid exposing sensitive values in plain text.
+
+Supported services include GitHub, GitLab, Bitbucket, and generic Git servers.
+
+#### Example: Using a Kubernetes Secret
+
+Create a Kubernetes Secret that holds your Git access token:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-token-secret
+  namespace: argocd
+type: Opaque
+stringData:
+  EXTENSION_GIT_TOKEN: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+
+Reference the token in your Argo CD server deployment:
+```yaml
+      initContainers:
+        - name: extension-
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.9
+          env:
+          - name: EXTENSION_URL
+            value: https://github.com/some-org/somerepo/releases/download/v0.0.1/extension.tar
+          - name: EXTENSION_GIT_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: github-token-secret
+                key: EXTENSION_GIT_TOKEN            
+          volumeMounts:
+            - name: extensions
+              mountPath: /tmp/extensions/
+          securityContext:
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+```
 
 ## Using ConfigMap
 
@@ -101,7 +147,7 @@ spec:
     spec:
       initContainers:
         - name: extension
-          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.5@sha256:27e72f047298188e2de1a73a1901013c274c4760c92f82e6e46cd5fbd0957c6b
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.9
           env:
           - name: EXTENSION_NAME
             valueFrom:

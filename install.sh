@@ -28,18 +28,94 @@ finalizer() {
 }
 trap finalizer EXIT
 
+# detect if URL is a Git repository URL
+is_git_url() {
+    local url="$1"
+    case "$url" in
+        https://github.com/*|https://gitlab.com/*|https://bitbucket.org/*|*.git|*git*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# construct authorization header for Git API
+get_git_auth_header() {
+    local url="$1"
+    local token="$2"
+
+    if [ -z "$token" ]; then
+        echo ""
+        return
+    fi
+
+    case "$url" in
+        https://github.com/*)
+            echo "Authorization: token $token"
+            ;;
+        https://gitlab.com/*)
+            echo "Authorization: Bearer $token"
+            ;;
+        https://bitbucket.org/*)
+            echo "Authorization: Bearer $token"
+            ;;
+        *)
+            # Generic Git token format
+            echo "Authorization: Bearer $token"
+            ;;
+    esac
+}
+
 # will download the extension respecting the max download
 # duration setting
 download_extension() {
     mkdir -p $download_dir
     echo "Downloading the UI extension..."
-    curl -Lf --max-time $download_max_sec $ext_url -o $ext_file
+
+    # Check if this is a Git repository URL and token is provided
+    if is_git_url "$ext_url" && [ -n "$git_token" ]; then
+        echo "Detected Git repository URL with authentication token"
+        auth_header=$(get_git_auth_header "$ext_url" "$git_token")
+
+        if [ -n "$auth_header" ]; then
+            echo "Using authenticated download for private repository"
+            curl -Lf --max-time $download_max_sec -H "$auth_header" "$ext_url" -o "$ext_file"
+        else
+            curl -Lf --max-time $download_max_sec "$ext_url" -o "$ext_file"
+        fi
+    elif is_git_url "$ext_url" && [ -z "$git_token" ]; then
+        echo "WARNING: Git repository URL detected but no EXTENSION_GIT_TOKEN provided"
+        echo "This may fail if the repository is private"
+        curl -Lf --max-time $download_max_sec "$ext_url" -o "$ext_file"
+    else
+        # Non-Git URL, use standard download
+        curl -Lf --max-time $download_max_sec "$ext_url" -o "$ext_file"
+    fi
+
+    # Validate checksum if provided
     if [ "$checksum_url" != "" ]; then
         echo "Validating the UI extension checksum..."
-        expected_sha=$(curl -Lf $checksum_url | grep "$ext_filename" | awk '{print $1;}')
+
+        # Apply same authentication logic for checksum URL if it's also a Git URL
+        if is_git_url "$checksum_url" && [ -n "$git_token" ]; then
+            auth_header=$(get_git_auth_header "$checksum_url" "$git_token")
+
+            if [ -n "$auth_header" ]; then
+                expected_sha=$(curl -Lf -H "$auth_header" "$checksum_url" | grep "$ext_filename" | awk '{print $1;}')
+            else
+                expected_sha=$(curl -Lf "$checksum_url" | grep "$ext_filename" | awk '{print $1;}')
+            fi
+        else
+            expected_sha=$(curl -Lf "$checksum_url" | grep "$ext_filename" | awk '{print $1;}')
+        fi
+
         current_sha=$(sha256sum $ext_file | awk '{print $1;}')
         if [ "$expected_sha" != "$current_sha" ]; then
             echo "ERROR: extension checksum mismatch"
+            echo "Expected: $expected_sha"
+            echo "Current:  $current_sha"
             exit 1
         fi
     fi
@@ -69,7 +145,6 @@ install_extension() {
     fi
 
     echo "UI extension installed successfully"
-
 }
 
 create_extension_js_file_with_vars() {
@@ -103,6 +178,10 @@ if [ "$ext_url" = "" ]; then
     echo "error: the env var EXTENSION_URL must be provided"
     exit 1
 fi
+
+# Git token for private repository access
+git_token="${EXTENSION_GIT_TOKEN:-}"
+
 checksum_url="${EXTENSION_CHECKSUM_URL:-}"
 download_max_sec="${MAX_DOWNLOAD_SEC:-30}"
 
@@ -118,7 +197,12 @@ if [ -n "${ext_vars}" ]; then
     ext_vars=$(echo "$ext_vars" | jq -c '.')
 fi
 
+# Log authentication status (without exposing token)
+if [ -n "$git_token" ]; then
+    echo "Git authentication token detected for private repository access"
+else
+    echo "No Git authentication token provided - public repositories only"
+fi
 
 download_extension
 install_extension
-
