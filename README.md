@@ -58,6 +58,9 @@ spec:
           volumeMounts:
             - name: extensions
               mountPath: /tmp/extensions/
+      volumes:
+        - name: extensions
+          emptyDir: {}
 ```
 
 > [!NOTE]
