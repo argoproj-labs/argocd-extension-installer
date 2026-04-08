@@ -20,6 +20,8 @@ list of all environment variables that can be configured:
 | EXTENSION_CHECKSUM_URL    | No       | ""        | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.          |
 | MAX_DOWNLOAD_SEC          | No       | 30        | Total time in seconds allowed to download the extension.                                                                                                                                                            |
 | EXTENSION_JS_VARS      | No       | ""        | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
+| EXTENSION_PROXY_USERNAME | No       | ""        | Username to be used when downloading the extension behind a proxy that requires authentication.                                                                                                                                             |
+| EXTENSION_PROXY_TOKEN    | No       | ""        | Password/Token to be used when downloading the extension behind a proxy that requires authentication.                                                                                                                                       |
 
 > [!IMPORTANT]
 > The tar file at `EXTENSION_URL` must contain a top-level directory named `resources` containing the extension js file. The file may be nested under additional directories. For example: `resources/my-extension/my-extension.js`.
