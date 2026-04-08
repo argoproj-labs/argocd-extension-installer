@@ -13,6 +13,7 @@ set -u
 
 PASS=0
 FAIL=0
+_last_exit=0
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,9 +40,9 @@ run_install() {
         docker_env_flags="$docker_env_flags -e $arg"
     done
     output=$(docker run --rm $docker_env_flags argocd-extension-installer:test 2>&1)
-    _exit=$?
+    _last_exit=$?
     echo "$output" | sed 's/^/    | /'
-    return $_exit
+    return $_last_exit
 }
 
 # ---------------------------------------------------------------------------
@@ -56,13 +57,12 @@ test_ignore_failure_true_exits_zero_on_bad_url() {
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=http://127.0.0.1:19999/does-not-exist.tar.gz \
         EXTENSION_VERSION=v0.0.1 \
-        IGNORE_FAILURE=true || true
-    actual=$?
-    if [ "$actual" = "0" ]; then
+        IGNORE_FAILURE=true
+    if [ "$_last_exit" = "0" ]; then
         pass "IGNORE_FAILURE=true: exits 0 when download fails"
     else
         fail "IGNORE_FAILURE=true: exits 0 when download fails" \
-             "expected exit code 0, got $actual"
+             "expected exit code 0, got $_last_exit"
     fi
 }
 
@@ -73,13 +73,12 @@ test_ignore_failure_false_exits_nonzero_on_bad_url() {
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=http://127.0.0.1:19999/does-not-exist.tar.gz \
         EXTENSION_VERSION=v0.0.1 \
-        IGNORE_FAILURE=false || true
-    actual=$?
-    if [ "$actual" != "0" ]; then
+        IGNORE_FAILURE=false
+    if [ "$_last_exit" != "0" ]; then
         pass "IGNORE_FAILURE=false: exits non-zero when download fails"
     else
         fail "IGNORE_FAILURE=false: exits non-zero when download fails" \
-             "expected non-zero exit code, got 0"
+             "expected non-zero exit code, got $_last_exit"
     fi
 }
 
@@ -89,14 +88,13 @@ test_ignore_failure_defaults_to_true() {
     run_install \
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=http://127.0.0.1:19999/does-not-exist.tar.gz \
-        EXTENSION_VERSION=v0.0.1 || true
+        EXTENSION_VERSION=v0.0.1
     # IGNORE_FAILURE intentionally not set
-    actual=$?
-    if [ "$actual" = "0" ]; then
+    if [ "$_last_exit" = "0" ]; then
         pass "IGNORE_FAILURE defaults to true: exits 0 when download fails"
     else
         fail "IGNORE_FAILURE defaults to true: exits 0 when download fails" \
-             "expected exit code 0 (default ignore_failure=true), got $actual"
+             "expected exit code 0 (default ignore_failure=true), got $_last_exit"
     fi
 }
 
@@ -125,15 +123,3 @@ run_all_tests() {
 }
 
 run_all_tests
-
-
-
-
-
-
-
-
-
-
-
-
