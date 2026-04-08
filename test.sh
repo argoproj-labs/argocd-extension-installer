@@ -38,7 +38,7 @@ run_install() {
     for arg in "$@"; do
         docker_env_flags="$docker_env_flags -e $arg"
     done
-    output=$(docker run --rm $docker_env_flags argocd-extension-installer:test 2>&1) || true
+    output=$(docker run --rm $docker_env_flags argocd-extension-installer:test 2>&1)
     _exit=$?
     echo "$output" | sed 's/^/    | /'
     return $_exit
@@ -125,6 +125,7 @@ run_all_tests() {
 }
 
 run_all_tests
+
 
 
 
