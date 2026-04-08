@@ -20,10 +20,7 @@ list of all environment variables that can be configured:
 | EXTENSION_CHECKSUM_URL | No        | ""      | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.                                  |
 | MAX_DOWNLOAD_SEC       | No        | 30      | Total time in seconds allowed to download the extension.                                                                                                                                                                                    |
 | EXTENSION_JS_VARS      | No        | ""      | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
-| IGNORE_FAILURE         | No        | true    | If `true`, the init container exits 0 even when the extension fails to download or install, allowing the Argo CD API server to start normally. Set to `false` only if you want a failed extension install to block API server startup.      |
-
-> [!TIP]
-> **`IGNORE_FAILURE` is `true` by default** because a broken or unreachable extension is rarely worth preventing the Argo CD API server from starting. Keeping the default means your cluster stays operational even when an extension's download URL is temporarily unavailable or the archive is corrupt. Only set `IGNORE_FAILURE=false` if the extension is critical to your workflow and you explicitly want startup to be blocked until the installation succeeds.
+| IGNORE_FAILURE         | No        | false   | If `true`, the init container exits 0 even when the extension fails to download or install, allowing the Argo CD API server to start normally. If `false` (the default), a failed extension install blocks API server startup.              |
 
 > [!IMPORTANT]
 > The tar file at `EXTENSION_URL` must contain a top-level directory named `resources` containing the extension js file. The file may be nested under additional directories. For example: `resources/my-extension/my-extension.js`.

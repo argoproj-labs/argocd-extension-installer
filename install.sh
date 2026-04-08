@@ -95,7 +95,7 @@ create_extension_js_file_with_vars() {
 ## Script
 ext_enabled="${EXTENSION_ENABLED:-true}"
 ext_name="${EXTENSION_NAME:-}"
-ignore_failure="${IGNORE_FAILURE:-true}"
+ignore_failure="${IGNORE_FAILURE:-false}"
 
 if [ "$ext_enabled" != "true" ]; then
     echo "$ext_name extension is disabled"

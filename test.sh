@@ -82,19 +82,19 @@ test_ignore_failure_false_exits_nonzero_on_bad_url() {
     fi
 }
 
-# Verify that the default value of IGNORE_FAILURE is true (i.e. omitting the
-# variable behaves the same as setting it to true).
-test_ignore_failure_defaults_to_true() {
+# Verify that the default value of IGNORE_FAILURE is false (i.e. omitting the
+# variable behaves the same as setting it to false).
+test_ignore_failure_defaults_to_false() {
     run_install \
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=http://127.0.0.1:19999/does-not-exist.tar.gz \
         EXTENSION_VERSION=v0.0.1
     # IGNORE_FAILURE intentionally not set
-    if [ "$_last_exit" = "0" ]; then
-        pass "IGNORE_FAILURE defaults to true: exits 0 when download fails"
+    if [ "$_last_exit" != "0" ]; then
+        pass "IGNORE_FAILURE defaults to false: exits non-zero when download fails"
     else
-        fail "IGNORE_FAILURE defaults to true: exits 0 when download fails" \
-             "expected exit code 0 (default ignore_failure=true), got $_last_exit"
+        fail "IGNORE_FAILURE defaults to false: exits non-zero when download fails" \
+             "expected non-zero exit code (default ignore_failure=false), got $_last_exit"
     fi
 }
 
