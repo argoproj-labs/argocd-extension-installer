@@ -30,15 +30,14 @@ fail() {
     FAIL=$(( FAIL + 1 ))
 }
 
-# run_install <description> [env var assignments ...]
-# Runs install.sh with the supplied environment and returns its exit code.
-# stdout/stderr from the script are suppressed; set VERBOSE=1 to see them.
+# run_install [env var assignments ...]
+# Runs install.sh with the supplied environment, prints its output, and
+# returns its exit code.
 run_install() {
-    if [ "${VERBOSE:-0}" = "1" ]; then
-        env "$@" sh "$SCRIPT"
-    else
-        env "$@" sh "$SCRIPT" >/dev/null 2>&1
-    fi
+    output=$(env "$@" sh "$SCRIPT" 2>&1) || true
+    _exit=$?
+    echo "$output" | sed 's/^/    | /'
+    return $_exit
 }
 
 # ---------------------------------------------------------------------------
@@ -53,7 +52,7 @@ test_ignore_failure_true_exits_zero_on_bad_url() {
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=http://127.0.0.1:19999/does-not-exist.tar.gz \
         EXTENSION_VERSION=v0.0.1 \
-        IGNORE_FAILURE=true
+        IGNORE_FAILURE=true || true
     actual=$?
     if [ "$actual" = "0" ]; then
         pass "IGNORE_FAILURE=true: exits 0 when download fails"
@@ -70,7 +69,7 @@ test_ignore_failure_false_exits_nonzero_on_bad_url() {
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=http://127.0.0.1:19999/does-not-exist.tar.gz \
         EXTENSION_VERSION=v0.0.1 \
-        IGNORE_FAILURE=false
+        IGNORE_FAILURE=false || true
     actual=$?
     if [ "$actual" != "0" ]; then
         pass "IGNORE_FAILURE=false: exits non-zero when download fails"
@@ -86,7 +85,7 @@ test_ignore_failure_defaults_to_true() {
     run_install \
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=http://127.0.0.1:19999/does-not-exist.tar.gz \
-        EXTENSION_VERSION=v0.0.1
+        EXTENSION_VERSION=v0.0.1 || true
     # IGNORE_FAILURE intentionally not set
     actual=$?
     if [ "$actual" = "0" ]; then
@@ -122,4 +121,10 @@ run_all_tests() {
 }
 
 run_all_tests
+
+
+
+
+
+
 
