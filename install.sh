@@ -59,10 +59,10 @@ install_extension() {
         echo "supported formats: gzip and tar"
         exit 1
     fi
-    if [ ! -d "/tmp/extensions/resources" ]; then
-        mkdir -p /tmp/extensions/resources
+    if [ ! -d "$ext_dir" ]; then
+        mkdir -p "$ext_dir"
     fi
-    cp -Rf resources/* /tmp/extensions/resources/
+    cp -Rf resources/* "$ext_dir/"
 
     if [ -n "$ext_vars" ] && [ -n "$ext_name" ]; then
         create_extension_js_file_with_vars
@@ -74,7 +74,7 @@ install_extension() {
 
 create_extension_js_file_with_vars() {
   echo "Generating extension vars js file..."
-  ext_installed_path=$(find /tmp/extensions/resources -type d -name "extension*-$ext_name*.js" | head -n 1)
+  ext_installed_path=$(find "$ext_dir" -type d -name "extension*-$ext_name*.js" | head -n 1)
   sanitized_extension_name=$(echo "${ext_name//-/_}" | tr '[:lower:]' '[:upper:]')
   ext_js_file_name="${sanitized_extension_name}_vars"
   js_file_path="${ext_installed_path}/extension-0-${ext_js_file_name}.js"
@@ -91,6 +91,7 @@ create_extension_js_file_with_vars() {
 ## Script
 ext_enabled="${EXTENSION_ENABLED:-true}"
 ext_name="${EXTENSION_NAME:-}"
+ext_dir="${EXTENSIONS_DIR:-/tmp/extensions}"
 
 if [ "$ext_enabled" != "true" ]; then
     echo "$ext_name extension is disabled"
