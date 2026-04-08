@@ -13,7 +13,6 @@ set -u
 
 PASS=0
 FAIL=0
-SCRIPT="$(cd "$(dirname "$0")" && pwd)/install.sh"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -30,11 +29,16 @@ fail() {
     FAIL=$(( FAIL + 1 ))
 }
 
-# run_install [env var assignments ...]
-# Runs install.sh with the supplied environment, prints its output, and
-# returns its exit code.
+# run_install [env var assignments (KEY=VALUE) ...]
+# Runs install.sh inside the Docker image with the supplied environment,
+# prints its output, and returns its exit code.
 run_install() {
-    output=$(env "$@" sh "$SCRIPT" 2>&1) || true
+    # Convert KEY=VALUE arguments into a list of "-e KEY=VALUE" docker flags
+    docker_env_flags=""
+    for arg in "$@"; do
+        docker_env_flags="$docker_env_flags -e $arg"
+    done
+    output=$(docker run --rm $docker_env_flags argocd-extension-installer:test 2>&1) || true
     _exit=$?
     echo "$output" | sed 's/^/    | /'
     return $_exit
@@ -121,6 +125,10 @@ run_all_tests() {
 }
 
 run_all_tests
+
+
+
+
 
 
 

@@ -13,7 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      - name: Build image
+        run: docker build -t argocd-extension-installer:test .
+
       - name: Run tests
         run: |
           chmod +x test.sh
           ./test.sh
+
+
