@@ -13,18 +13,22 @@ uptime_ms() {
 start_time=$(uptime_ms)
 
 finalizer() {
+    code=$?
     local dl="${download_dir:-}"
     if [ -d "$dl" ]; then
       rm -rf $dl
     fi
-    code=$?
     if [ $code -ne 0 ]; then
         echo "ERROR: failed to install $ext_name extension: error code: $code"
+        if [ "${ignore_failure}" = "true" ]; then
+            echo "IGNORE_FAILURE is set to true: ignoring error and exiting 0"
+            code=0
+        fi
     fi
     end_time=$(uptime_ms)
     elapsed=$(( end_time-start_time ))
     echo "Elapsed Time: $elapsed ms"
-    exit 0
+    exit $code
 }
 trap finalizer EXIT
 
@@ -91,6 +95,7 @@ create_extension_js_file_with_vars() {
 ## Script
 ext_enabled="${EXTENSION_ENABLED:-true}"
 ext_name="${EXTENSION_NAME:-}"
+ignore_failure="${IGNORE_FAILURE:-true}"
 
 if [ "$ext_enabled" != "true" ]; then
     echo "$ext_name extension is disabled"
