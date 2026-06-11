@@ -49,6 +49,21 @@ run_install() {
 # Tests
 # ---------------------------------------------------------------------------
 
+# Unit test for checksum filename matching (no Docker required).
+test_checksum_lookup_ignores_sbom_sidecar_filename() {
+    ext_filename="gitops-promoter-argocd-extension.tar.gz"
+    expected_tarball_sha="632e946aca5b92bc6f9053ea2142940978a9b9947d11a0d59b3a338b5c58e095"
+    checksums=$(curl -Lf \
+        "https://github.com/argoproj-labs/gitops-promoter/releases/download/v0.30.0/gitops-promoter_0.30.0_checksums.txt")
+    expected_sha=$(echo "$checksums" | awk -v f="$ext_filename" '$2 == f {print $1; exit}')
+    if [ "$expected_sha" = "$expected_tarball_sha" ]; then
+        pass "exact filename checksum lookup ignores .tar.gz.sbom.json sidecar"
+    else
+        fail "exact filename checksum lookup ignores .tar.gz.sbom.json sidecar" \
+             "expected $expected_tarball_sha, got '$expected_sha'"
+    fi
+}
+
 # Verify that IGNORE_FAILURE=true (the default) causes the script to exit 0
 # even when the extension URL is unreachable, so it never blocks API server
 # startup.
@@ -95,6 +110,24 @@ test_ignore_failure_defaults_to_false() {
     else
         fail "IGNORE_FAILURE defaults to false: exits non-zero when download fails" \
              "expected non-zero exit code (default ignore_failure=false), got $_last_exit"
+    fi
+}
+
+# GitOps Promoter v0.30.0 checksums include a .tar.gz.sbom.json sidecar whose
+# filename contains the tarball name as a substring. Substring grep matches both
+# lines and fails validation even though the downloaded artifact hash is correct.
+test_checksum_succeeds_when_sbom_sidecar_present() {
+    run_install \
+        EXTENSION_NAME=gitops-promoter \
+        EXTENSION_URL=https://github.com/argoproj-labs/gitops-promoter/releases/download/v0.30.0/gitops-promoter-argocd-extension.tar.gz \
+        EXTENSION_CHECKSUM_URL=https://github.com/argoproj-labs/gitops-promoter/releases/download/v0.30.0/gitops-promoter_0.30.0_checksums.txt \
+        EXTENSION_VERSION=v0.30.0 \
+        IGNORE_FAILURE=false
+    if [ "$_last_exit" = "0" ]; then
+        pass "checksum validation succeeds when checksums file includes SBOM sidecar"
+    else
+        fail "checksum validation succeeds when checksums file includes SBOM sidecar" \
+             "expected exit code 0, got $_last_exit"
     fi
 }
 
