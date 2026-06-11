@@ -35,6 +35,8 @@ trap finalizer EXIT
 lookup_expected_checksum() {
     checksum_content="$1"
     target_filename="$2"
+    # checksums.txt lines are "SHA256  filename"; match field 2 exactly (not
+    # substring) so sidecar files like extension.tar.gz.sbom.json are ignored
     echo "$checksum_content" | awk -v f="$target_filename" '$2 == f {print $1; exit}'
 }
 
