@@ -11,6 +11,8 @@
 
 set -u
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+
 PASS=0
 FAIL=0
 _last_exit=0
@@ -39,7 +41,9 @@ run_install() {
     for arg in "$@"; do
         docker_env_flags="$docker_env_flags -e $arg"
     done
-    output=$(docker run --rm $docker_env_flags argocd-extension-installer:test 2>&1)
+    output=$(docker run --rm \
+        -v "$SCRIPT_DIR/testdata:/home/ext-installer/testdata:ro" \
+        $docker_env_flags argocd-extension-installer:test 2>&1)
     _last_exit=$?
     echo "$output" | sed 's/^/    | /'
     return $_last_exit
@@ -95,6 +99,24 @@ test_ignore_failure_defaults_to_false() {
     else
         fail "IGNORE_FAILURE defaults to false: exits non-zero when download fails" \
              "expected non-zero exit code (default ignore_failure=false), got $_last_exit"
+    fi
+}
+
+# When a checksums file lists both an extension tarball and a related sidecar
+# artifact whose filename contains the tarball name as a substring, validation
+# must match the tarball entry exactly.
+test_checksum_succeeds_when_sbom_sidecar_present() {
+    run_install \
+        EXTENSION_NAME=test-ext \
+        EXTENSION_URL=file:///home/ext-installer/testdata/extension.tar.gz \
+        EXTENSION_CHECKSUM_URL=file:///home/ext-installer/testdata/checksums.txt \
+        EXTENSION_VERSION=test \
+        IGNORE_FAILURE=false
+    if [ "$_last_exit" = "0" ]; then
+        pass "checksum validation succeeds when checksums file includes SBOM sidecar"
+    else
+        fail "checksum validation succeeds when checksums file includes SBOM sidecar" \
+             "expected exit code 0, got $_last_exit"
     fi
 }
 

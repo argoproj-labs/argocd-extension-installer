@@ -32,6 +32,14 @@ finalizer() {
 }
 trap finalizer EXIT
 
+lookup_expected_checksum() {
+    checksum_content="$1"
+    target_filename="$2"
+    # checksums.txt lines are "SHA256  filename"; match field 2 exactly (not
+    # substring) so sidecar files like extension.tar.gz.sbom.json are ignored
+    echo "$checksum_content" | awk -v f="$target_filename" '$2 == f {print $1; exit}'
+}
+
 # will download the extension respecting the max download
 # duration setting
 download_extension() {
@@ -40,7 +48,12 @@ download_extension() {
     curl -Lf --max-time $download_max_sec $ext_url -o $ext_file
     if [ "$checksum_url" != "" ]; then
         echo "Validating the UI extension checksum..."
-        expected_sha=$(curl -Lf $checksum_url | grep "$ext_filename" | awk '{print $1;}')
+        checksum_content=$(curl -Lf "$checksum_url")
+        expected_sha=$(lookup_expected_checksum "$checksum_content" "$ext_filename")
+        if [ -z "$expected_sha" ]; then
+            echo "ERROR: checksum not found for $ext_filename"
+            exit 1
+        fi
         current_sha=$(sha256sum $ext_file | awk '{print $1;}')
         if [ "$expected_sha" != "$current_sha" ]; then
             echo "ERROR: extension checksum mismatch"
