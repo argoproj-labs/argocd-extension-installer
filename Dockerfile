@@ -10,5 +10,6 @@ USER $USER
 WORKDIR $HOME
 
 ADD install.sh .
+ADD testdata/ testdata/
 
 ENTRYPOINT ["./install.sh"]

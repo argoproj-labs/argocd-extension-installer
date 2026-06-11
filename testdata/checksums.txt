@@ -1,0 +1,2 @@
+039890c1ec3505b977de6a768edcb8a3e7862a4de1b90490657fc2e5d8d9304c  extension.tar.gz
+deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  extension.tar.gz.sbom.json

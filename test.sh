@@ -51,10 +51,10 @@ run_install() {
 
 # Unit test for checksum filename matching (no Docker required).
 test_checksum_lookup_ignores_sbom_sidecar_filename() {
-    ext_filename="gitops-promoter-argocd-extension.tar.gz"
-    expected_tarball_sha="632e946aca5b92bc6f9053ea2142940978a9b9947d11a0d59b3a338b5c58e095"
-    checksums=$(curl -Lf \
-        "https://github.com/argoproj-labs/gitops-promoter/releases/download/v0.30.0/gitops-promoter_0.30.0_checksums.txt")
+    ext_filename="extension.tar.gz"
+    expected_tarball_sha="039890c1ec3505b977de6a768edcb8a3e7862a4de1b90490657fc2e5d8d9304c"
+    checksums="039890c1ec3505b977de6a768edcb8a3e7862a4de1b90490657fc2e5d8d9304c  extension.tar.gz
+deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  extension.tar.gz.sbom.json"
     expected_sha=$(echo "$checksums" | awk -v f="$ext_filename" '$2 == f {print $1; exit}')
     if [ "$expected_sha" = "$expected_tarball_sha" ]; then
         pass "exact filename checksum lookup ignores .tar.gz.sbom.json sidecar"
@@ -113,15 +113,15 @@ test_ignore_failure_defaults_to_false() {
     fi
 }
 
-# GitOps Promoter v0.30.0 checksums include a .tar.gz.sbom.json sidecar whose
-# filename contains the tarball name as a substring. Substring grep matches both
-# lines and fails validation even though the downloaded artifact hash is correct.
+# When a checksums file lists both an extension tarball and a related sidecar
+# artifact whose filename contains the tarball name as a substring, validation
+# must match the tarball entry exactly.
 test_checksum_succeeds_when_sbom_sidecar_present() {
     run_install \
-        EXTENSION_NAME=gitops-promoter \
-        EXTENSION_URL=https://github.com/argoproj-labs/gitops-promoter/releases/download/v0.30.0/gitops-promoter-argocd-extension.tar.gz \
-        EXTENSION_CHECKSUM_URL=https://github.com/argoproj-labs/gitops-promoter/releases/download/v0.30.0/gitops-promoter_0.30.0_checksums.txt \
-        EXTENSION_VERSION=v0.30.0 \
+        EXTENSION_NAME=test-ext \
+        EXTENSION_URL=file:///home/ext-installer/testdata/extension.tar.gz \
+        EXTENSION_CHECKSUM_URL=file:///home/ext-installer/testdata/checksums.txt \
+        EXTENSION_VERSION=test \
         IGNORE_FAILURE=false
     if [ "$_last_exit" = "0" ]; then
         pass "checksum validation succeeds when checksums file includes SBOM sidecar"
