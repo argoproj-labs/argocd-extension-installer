@@ -11,6 +11,8 @@
 
 set -u
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+
 PASS=0
 FAIL=0
 _last_exit=0
@@ -39,7 +41,9 @@ run_install() {
     for arg in "$@"; do
         docker_env_flags="$docker_env_flags -e $arg"
     done
-    output=$(docker run --rm $docker_env_flags argocd-extension-installer:test 2>&1)
+    output=$(docker run --rm \
+        -v "$SCRIPT_DIR/testdata:/home/ext-installer/testdata:ro" \
+        $docker_env_flags argocd-extension-installer:test 2>&1)
     _last_exit=$?
     echo "$output" | sed 's/^/    | /'
     return $_last_exit
