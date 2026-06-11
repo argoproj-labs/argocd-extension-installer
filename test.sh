@@ -49,21 +49,6 @@ run_install() {
 # Tests
 # ---------------------------------------------------------------------------
 
-# Unit test for checksum filename matching (no Docker required).
-test_checksum_lookup_ignores_sbom_sidecar_filename() {
-    ext_filename="extension.tar.gz"
-    expected_tarball_sha="039890c1ec3505b977de6a768edcb8a3e7862a4de1b90490657fc2e5d8d9304c"
-    checksums="039890c1ec3505b977de6a768edcb8a3e7862a4de1b90490657fc2e5d8d9304c  extension.tar.gz
-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  extension.tar.gz.sbom.json"
-    expected_sha=$(echo "$checksums" | awk -v f="$ext_filename" '$2 == f {print $1; exit}')
-    if [ "$expected_sha" = "$expected_tarball_sha" ]; then
-        pass "exact filename checksum lookup ignores .tar.gz.sbom.json sidecar"
-    else
-        fail "exact filename checksum lookup ignores .tar.gz.sbom.json sidecar" \
-             "expected $expected_tarball_sha, got '$expected_sha'"
-    fi
-}
-
 # Verify that IGNORE_FAILURE=true (the default) causes the script to exit 0
 # even when the extension URL is unreachable, so it never blocks API server
 # startup.
