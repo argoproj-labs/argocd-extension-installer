@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -euox pipefail
+set -euo pipefail
 
 # will return the current system uptime in milliseconds
 uptime_ms() {
