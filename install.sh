@@ -40,11 +40,9 @@ lookup_expected_checksum() {
     echo "$checksum_content" | awk -v f="$target_filename" '$2 == f {print $1; exit}'
 }
 
-# curl with the extra headers configured via EXTENSION_HTTP_HEADERS, if any.
-# The headers are read from a file rather than passed as -H arguments so that
-# credentials stay out of the process list.
+# curl with the extra headers configured via EXTENSION_HTTP_HEADERS_FILE, if any.
 curl_with_headers() {
-    if [ -f "$headers_file" ]; then
+    if [ -n "$headers_file" ]; then
         curl -Lf -H "@$headers_file" "$@"
     else
         curl -Lf "$@"
@@ -135,23 +133,20 @@ fi
 checksum_url="${EXTENSION_CHECKSUM_URL:-}"
 download_max_sec="${MAX_DOWNLOAD_SEC:-30}"
 
+# Extra HTTP headers, one "Name: value" pair per line, read from a mounted file
+# so that credentials are not carried in the environment.
+headers_file="${EXTENSION_HTTP_HEADERS_FILE:-}"
+if [ -n "$headers_file" ] && [ ! -f "$headers_file" ]; then
+    echo "error: EXTENSION_HTTP_HEADERS_FILE is set but $headers_file does not exist"
+    exit 1
+fi
+
 ext_filename=$(basename -- "$ext_url")
 download_dir=`mktemp -d -t extension-XXXXXX`
 ext_file="$download_dir/$ext_filename"
 if [ -f $ext_file ]; then
     rm $ext_file
 fi
-
-# EXTENSION_HTTP_HEADERS usually carries credentials. It is read and written to
-# disk with xtrace disabled, and never assigned to a shell variable, so the
-# value reaches neither the container logs nor the process list. download_dir
-# is created by mktemp (mode 700) and removed by the finalizer trap.
-headers_file="$download_dir/.headers"
-{ set +x; } 2>/dev/null
-if [ -n "${EXTENSION_HTTP_HEADERS:-}" ]; then
-    printf '%s\n' "$EXTENSION_HTTP_HEADERS" > "$headers_file"
-fi
-set -x
 
 ext_vars="${EXTENSION_JS_VARS:-}"
 if [ -n "${ext_vars}" ]; then

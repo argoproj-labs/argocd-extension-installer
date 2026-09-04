@@ -19,7 +19,7 @@ list of all environment variables that can be configured:
 | EXTENSION_VERSION      | Yes       | ""      | The version of the extension to be installed.                                                                                                                                                                                               |
 | EXTENSION_CHECKSUM_URL | No        | ""      | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.                                  |
 | MAX_DOWNLOAD_SEC       | No        | 30      | Total time in seconds allowed to download the extension.                                                                                                                                                                                    |
-| EXTENSION_HTTP_HEADERS | No        | ""      | Additional HTTP headers to send when downloading the extension and its checksum, one `Name: value` pair per line. Typically used to authenticate against a private extension host. See [Private extensions](#private-extensions).             |
+| EXTENSION_HTTP_HEADERS_FILE | No        | ""      | Path to a file containing additional HTTP headers to send when downloading the extension and its checksum, one `Name: value` pair per line. Typically a mounted Secret used to authenticate against a private extension host. See [Private extensions](#private-extensions).             |
 | EXTENSION_JS_VARS      | No        | ""      | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
 | IGNORE_FAILURE         | No        | false   | If `true`, the init container exits 0 even when the extension fails to download or install, allowing the Argo CD API server to start normally. If `false` (the default), a failed extension install blocks API server startup.              |
 
@@ -72,9 +72,9 @@ spec:
 
 ## Private extensions
 
-Extensions served from a host that requires authentication can be fetched by setting `EXTENSION_HTTP_HEADERS` to one or more `Name: value` header pairs, one per line. The same headers are sent for both `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL`.
+Extensions served from a host that requires authentication can be fetched by mounting a file of HTTP headers and pointing `EXTENSION_HTTP_HEADERS_FILE` at it. The file holds one `Name: value` pair per line, and the same headers are sent for both `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL`.
 
-Because the value is normally a credential, provide it from a Secret rather than a ConfigMap. The installer never prints the value and passes it to `curl` by file reference, so it does not appear in the init container logs or in the process list.
+Because the headers normally carry a credential, keep them in a Secret and mount it rather than passing them through the environment. `curl` reads the file directly, so the credential never reaches the init container's environment, its process arguments, or its logs.
 
 ```yaml
 apiVersion: v1
@@ -100,18 +100,26 @@ stringData:
             value: v0.0.1
           - name: EXTENSION_URL
             value: https://artifacts.example.com/my-extension/v0.0.1/extension.tar.gz
-          - name: EXTENSION_HTTP_HEADERS
-            valueFrom:
-              secretKeyRef:
-                name: argocd-extension-headers
-                key: headers
+          - name: EXTENSION_HTTP_HEADERS_FILE
+            value: /etc/argocd-extension/headers
           volumeMounts:
             - name: extensions
               mountPath: /tmp/extensions/
+            - name: extension-headers
+              mountPath: /etc/argocd-extension
+              readOnly: true
           securityContext:
             runAsUser: 1000
             allowPrivilegeEscalation: false
+      volumes:
+        - name: extensions
+          emptyDir: {}
+        - name: extension-headers
+          secret:
+            secretName: argocd-extension-headers
 ```
+
+The Secret mounts with the default mode `0644`, so the container reading it as `runAsUser: 1000` needs no further permission changes.
 
 ### Private GitHub releases
 
@@ -121,6 +129,8 @@ GitHub serves release assets from private repositories through the [release asse
   - name: EXTENSION_URL
     value: https://api.github.com/repos/some-org/somerepo/releases/assets/123456789
 ```
+
+with the mounted headers file containing:
 
 ```
 Authorization: Bearer ghp_xxxxxxxxxxxxxxxxxxxx

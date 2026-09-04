@@ -120,18 +120,19 @@ test_checksum_succeeds_when_sbom_sidecar_present() {
     fi
 }
 
-# Verify that EXTENSION_HTTP_HEADERS is actually sent on the download request.
-# A one-shot busybox nc listener inside the container captures the raw request.
+# Verify that the headers in EXTENSION_HTTP_HEADERS_FILE are actually sent on
+# the download request. A one-shot busybox nc listener inside the container
+# captures the raw request.
 test_http_headers_are_sent() {
     output=$(docker run --rm --entrypoint sh argocd-extension-installer:test -c '
+        printf "Authorization: Bearer SENTINEL\nAccept: application/octet-stream\n" > /tmp/headers
         { printf "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"; sleep 2; } \
             | nc -l -p 18080 > /tmp/req.txt &
         sleep 1
         EXTENSION_NAME=test-ext \
         EXTENSION_VERSION=v0.0.1 \
         EXTENSION_URL=http://127.0.0.1:18080/extension.tar.gz \
-        EXTENSION_HTTP_HEADERS="Authorization: Bearer SENTINEL
-Accept: application/octet-stream" \
+        EXTENSION_HTTP_HEADERS_FILE=/tmp/headers \
         IGNORE_FAILURE=true \
             ./install.sh >/dev/null 2>&1
         wait
@@ -140,31 +141,27 @@ Accept: application/octet-stream" \
     echo "$output" | sed 's/^/    | /'
     if echo "$output" | grep -q "Authorization: Bearer SENTINEL" &&
        echo "$output" | grep -q "Accept: application/octet-stream"; then
-        pass "EXTENSION_HTTP_HEADERS: all headers are sent on the download request"
+        pass "EXTENSION_HTTP_HEADERS_FILE: all headers are sent on the download request"
     else
-        fail "EXTENSION_HTTP_HEADERS: all headers are sent on the download request" \
+        fail "EXTENSION_HTTP_HEADERS_FILE: all headers are sent on the download request" \
              "request did not contain the configured headers"
     fi
 }
 
-# EXTENSION_HTTP_HEADERS normally carries credentials, and install.sh runs under
-# `set -x`. The value must never appear in the container output.
-test_http_headers_are_not_logged() {
-    EXTENSION_HTTP_HEADERS="Authorization: Bearer SENTINEL"
-    export EXTENSION_HTTP_HEADERS
+# A typo'd or unmounted EXTENSION_HTTP_HEADERS_FILE must fail loudly rather than
+# silently falling back to an unauthenticated request.
+test_http_headers_file_missing_fails() {
     run_install \
         EXTENSION_NAME=test-ext \
         EXTENSION_URL=file:///home/ext-installer/testdata/extension.tar.gz \
-        EXTENSION_CHECKSUM_URL=file:///home/ext-installer/testdata/checksums.txt \
         EXTENSION_VERSION=test \
         IGNORE_FAILURE=false \
-        EXTENSION_HTTP_HEADERS
-    unset EXTENSION_HTTP_HEADERS
-    if echo "$output" | grep -q SENTINEL; then
-        fail "EXTENSION_HTTP_HEADERS: value is not written to the logs" \
-             "the header value leaked into the install output"
+        EXTENSION_HTTP_HEADERS_FILE=/nonexistent/headers
+    if [ "$_last_exit" != "0" ] && echo "$output" | grep -q "does not exist"; then
+        pass "EXTENSION_HTTP_HEADERS_FILE: missing file fails with a clear error"
     else
-        pass "EXTENSION_HTTP_HEADERS: value is not written to the logs"
+        fail "EXTENSION_HTTP_HEADERS_FILE: missing file fails with a clear error" \
+             "expected non-zero exit and an error naming the missing file, got $_last_exit"
     fi
 }
 
