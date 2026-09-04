@@ -11,16 +11,20 @@ and install the configured UI extension. All configuration is provided
 as environment variables as part of the init container. Find below the
 list of all environment variables that can be configured:
 
-| Env Var                   | Required? | Default   | Description                                                                                                                                                                                                         |
-|---------------------------|----------|-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| EXTENSION_NAME            | Yes      | ""        | Extension Name                                                                                                                                                                                                      |
-| EXTENSION_ENABLED         | No       | true      | If set to false will skip the installation. Noop                                                                                                                                                                    |
-| EXTENSION_URL             | Yes      | ""        | Must be set to a valid URL where the UI extension can be downloaded from. <br>Argo CD API server needs to have network access to this URL.                                                                          |
-| EXTENSION_VERSION         | Yes      | ""        | The version of the extension to be installed.                                                                                                                                                                       |
-| EXTENSION_CHECKSUM_URL    | No       | ""        | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.          |
-| MAX_DOWNLOAD_SEC          | No       | 30        | Total time in seconds allowed to download the extension.                                                                                                                                                            |
-| EXTENSION_JS_VARS      | No       | ""        | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
+| Env Var                | Required? | Default | Description                                                                                                                                                                                                                                 |
+|------------------------|-----------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| EXTENSION_NAME         | Yes       | ""      | Extension Name                                                                                                                                                                                                                              |
+| EXTENSION_ENABLED      | No        | true    | If set to false will skip the installation. Noop                                                                                                                                                                                            |
+| EXTENSION_URL          | Yes       | ""      | Must be set to a valid URL where the UI extension can be downloaded from. <br>Argo CD API server needs to have network access to this URL.                                                                                                  |
+| EXTENSION_VERSION      | Yes       | ""      | The version of the extension to be installed.                                                                                                                                                                                               |
+| EXTENSION_CHECKSUM_URL | No        | ""      | Can be set to the file containing the checksum to validate the downloaded<br>extension. Will skip the checksum validation if not provided.<br>Argo CD API server needs to have network access to this URL.                                  |
+| MAX_DOWNLOAD_SEC       | No        | 30      | Total time in seconds allowed to download the extension.                                                                                                                                                                                    |
+| EXTENSION_HTTP_HEADERS_FILE | No        | ""      | Path to a file containing additional HTTP headers to send when downloading the extension and its checksum, one `Name: value` pair per line. Typically a mounted Secret used to authenticate against a private extension host. See [Private extensions](#private-extensions).             |
+| EXTENSION_JS_VARS      | No        | ""      | Export the variables to `extension-$EXTENSION_JS_VARS` in js file within the extension folder. These variables will be exported as env variables with key `${EXTENSION_NAME}_VARS`. <br/>The format should be `{key1=value1, key2=value2}`. |
+| IGNORE_FAILURE         | No        | false   | If `true`, the init container exits 0 even when the extension fails to download or install, allowing the Argo CD API server to start normally. If `false` (the default), a failed extension install blocks API server startup.              |
 
+> [!IMPORTANT]
+> The tar file at `EXTENSION_URL` must contain a top-level directory named `resources` containing the extension js file. The file may be nested under additional directories. For example: `resources/my-extension/my-extension.js`.
 
 # Examples
 
@@ -41,7 +45,7 @@ spec:
     spec:
       initContainers:
         - name: extension-
-          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.5@sha256:27e72f047298188e2de1a73a1901013c274c4760c92f82e6e46cd5fbd0957c6b
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.9@sha256:d2b43c18ac1401f579f6d27878f45e253d1e3f30287471ae74e6a4315ceb0611
           env:
           - name: EXTENSION_URL
             value: https://github.com/some-org/somerepo/releases/download/v0.0.1/extension.tar
@@ -56,12 +60,84 @@ spec:
           volumeMounts:
             - name: extensions
               mountPath: /tmp/extensions/
+      volumes:
+        - name: extensions
+          emptyDir: {}
 ```
 
 > [!NOTE]
 > It is a good practice to appended the image digest after the tag to ensure a deterministic and safe image pulling.
 > The tag digest can be obtained in quay by clicking in the "fetch tag" icon and select "Docker Pull (by digest)":
 > https://quay.io/repository/argoprojlabs/argocd-extension-installer?tab=tags
+
+## Private extensions
+
+Extensions served from a host that requires authentication can be fetched by mounting a file of HTTP headers and pointing `EXTENSION_HTTP_HEADERS_FILE` at it. The file holds one `Name: value` pair per line, and the same headers are sent for both `EXTENSION_URL` and `EXTENSION_CHECKSUM_URL`.
+
+Because the headers normally carry a credential, keep them in a Secret and mount it rather than passing them through the environment. `curl` reads the file directly, so the credential never reaches the init container's environment, its process arguments, or its logs.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-extension-headers
+  namespace: argocd
+type: Opaque
+stringData:
+  headers: |
+    Authorization: Bearer ghp_xxxxxxxxxxxxxxxxxxxx
+    Accept: application/octet-stream
+```
+
+```yaml
+      initContainers:
+        - name: extension-private
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.9@sha256:d2b43c18ac1401f579f6d27878f45e253d1e3f30287471ae74e6a4315ceb0611
+          env:
+          - name: EXTENSION_NAME
+            value: my-extension
+          - name: EXTENSION_VERSION
+            value: v0.0.1
+          - name: EXTENSION_URL
+            value: https://artifacts.example.com/my-extension/v0.0.1/extension.tar.gz
+          - name: EXTENSION_HTTP_HEADERS_FILE
+            value: /etc/argocd-extension/headers
+          volumeMounts:
+            - name: extensions
+              mountPath: /tmp/extensions/
+            - name: extension-headers
+              mountPath: /etc/argocd-extension
+              readOnly: true
+          securityContext:
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: extensions
+          emptyDir: {}
+        - name: extension-headers
+          secret:
+            secretName: argocd-extension-headers
+```
+
+The Secret mounts with the default mode `0644`, so the container reading it as `runAsUser: 1000` needs no further permission changes.
+
+### Private GitHub releases
+
+GitHub serves release assets from private repositories through the [release asset API endpoint](https://docs.github.com/en/rest/releases/assets#get-a-release-asset) rather than the `releases/download/...` browser URL, which is not authenticated by a personal access token. Point `EXTENSION_URL` at the API endpoint and request the binary content with an `Accept` header:
+
+```yaml
+  - name: EXTENSION_URL
+    value: https://api.github.com/repos/some-org/somerepo/releases/assets/123456789
+```
+
+with the mounted headers file containing:
+
+```
+Authorization: Bearer ghp_xxxxxxxxxxxxxxxxxxxx
+Accept: application/octet-stream
+```
+
+The asset id can be found with `gh api repos/some-org/somerepo/releases/tags/v0.0.1 --jq '.assets[] | "\(.id) \(.name)"'`. GitHub answers that endpoint with either the asset itself or a redirect to a storage URL. `curl` drops the `Authorization` header when a redirect crosses to another host, so the credential is not forwarded to the storage provider.
 
 ## Using ConfigMap
 
@@ -99,7 +175,7 @@ spec:
     spec:
       initContainers:
         - name: extension
-          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.5@sha256:27e72f047298188e2de1a73a1901013c274c4760c92f82e6e46cd5fbd0957c6b
+          image: quay.io/argoprojlabs/argocd-extension-installer:v0.0.9@sha256:d2b43c18ac1401f579f6d27878f45e253d1e3f30287471ae74e6a4315ceb0611
           env:
           - name: EXTENSION_NAME
             valueFrom:

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -euox pipefail
+set -euo pipefail
 
 # will return the current system uptime in milliseconds
 uptime_ms() {
@@ -13,30 +13,56 @@ uptime_ms() {
 start_time=$(uptime_ms)
 
 finalizer() {
+    code=$?
     local dl="${download_dir:-}"
     if [ -d "$dl" ]; then
       rm -rf $dl
     fi
-    code=$?
     if [ $code -ne 0 ]; then
         echo "ERROR: failed to install $ext_name extension: error code: $code"
+        if [ "${ignore_failure}" = "true" ]; then
+            echo "IGNORE_FAILURE is set to true: ignoring error and exiting 0"
+            code=0
+        fi
     fi
     end_time=$(uptime_ms)
     elapsed=$(( end_time-start_time ))
     echo "Elapsed Time: $elapsed ms"
-    exit 0
+    exit $code
 }
 trap finalizer EXIT
+
+lookup_expected_checksum() {
+    checksum_content="$1"
+    target_filename="$2"
+    # checksums.txt lines are "SHA256  filename"; match field 2 exactly (not
+    # substring) so sidecar files like extension.tar.gz.sbom.json are ignored
+    echo "$checksum_content" | awk -v f="$target_filename" '$2 == f {print $1; exit}'
+}
+
+# curl with the extra headers configured via EXTENSION_HTTP_HEADERS_FILE, if any.
+curl_with_headers() {
+    if [ -n "$headers_file" ]; then
+        curl -Lf -H "@$headers_file" "$@"
+    else
+        curl -Lf "$@"
+    fi
+}
 
 # will download the extension respecting the max download
 # duration setting
 download_extension() {
     mkdir -p $download_dir
     echo "Downloading the UI extension..."
-    curl -Lf --max-time $download_max_sec $ext_url -o $ext_file
+    curl_with_headers --max-time $download_max_sec $ext_url -o $ext_file
     if [ "$checksum_url" != "" ]; then
         echo "Validating the UI extension checksum..."
-        expected_sha=$(curl -Lf $checksum_url | grep "$ext_filename" | awk '{print $1;}')
+        checksum_content=$(curl_with_headers "$checksum_url")
+        expected_sha=$(lookup_expected_checksum "$checksum_content" "$ext_filename")
+        if [ -z "$expected_sha" ]; then
+            echo "ERROR: checksum not found for $ext_filename"
+            exit 1
+        fi
         current_sha=$(sha256sum $ext_file | awk '{print $1;}')
         if [ "$expected_sha" != "$current_sha" ]; then
             echo "ERROR: extension checksum mismatch"
@@ -92,6 +118,7 @@ create_extension_js_file_with_vars() {
 ext_enabled="${EXTENSION_ENABLED:-true}"
 ext_name="${EXTENSION_NAME:-}"
 ext_dir="${EXTENSIONS_DIR:-/tmp/extensions}"
+ignore_failure="${IGNORE_FAILURE:-false}"
 
 if [ "$ext_enabled" != "true" ]; then
     echo "$ext_name extension is disabled"
@@ -106,6 +133,14 @@ if [ "$ext_url" = "" ]; then
 fi
 checksum_url="${EXTENSION_CHECKSUM_URL:-}"
 download_max_sec="${MAX_DOWNLOAD_SEC:-30}"
+
+# Extra HTTP headers, one "Name: value" pair per line, read from a mounted file
+# so that credentials are not carried in the environment.
+headers_file="${EXTENSION_HTTP_HEADERS_FILE:-}"
+if [ -n "$headers_file" ] && [ ! -f "$headers_file" ]; then
+    echo "error: EXTENSION_HTTP_HEADERS_FILE is set but $headers_file does not exist"
+    exit 1
+fi
 
 ext_filename=$(basename -- "$ext_url")
 download_dir=`mktemp -d -t extension-XXXXXX`
