@@ -117,7 +117,7 @@ create_extension_js_file_with_vars() {
 ## Script
 ext_enabled="${EXTENSION_ENABLED:-true}"
 ext_name="${EXTENSION_NAME:-}"
-ext_dir="${EXTENSIONS_DIR:-/tmp/extensions}"
+ext_dir="${EXTENSIONS_DIR:-/tmp/extensions/resources}"
 ignore_failure="${IGNORE_FAILURE:-false}"
 
 if [ "$ext_enabled" != "true" ]; then
