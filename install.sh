@@ -40,15 +40,26 @@ lookup_expected_checksum() {
     echo "$checksum_content" | awk -v f="$target_filename" '$2 == f {print $1; exit}'
 }
 
+# curl with the extra headers configured via EXTENSION_HTTP_HEADERS, if any.
+# The headers are read from a file rather than passed as -H arguments so that
+# credentials stay out of the process list.
+curl_with_headers() {
+    if [ -f "$headers_file" ]; then
+        curl -Lf -H "@$headers_file" "$@"
+    else
+        curl -Lf "$@"
+    fi
+}
+
 # will download the extension respecting the max download
 # duration setting
 download_extension() {
     mkdir -p $download_dir
     echo "Downloading the UI extension..."
-    curl -Lf --max-time $download_max_sec $ext_url -o $ext_file
+    curl_with_headers --max-time $download_max_sec $ext_url -o $ext_file
     if [ "$checksum_url" != "" ]; then
         echo "Validating the UI extension checksum..."
-        checksum_content=$(curl -Lf "$checksum_url")
+        checksum_content=$(curl_with_headers "$checksum_url")
         expected_sha=$(lookup_expected_checksum "$checksum_content" "$ext_filename")
         if [ -z "$expected_sha" ]; then
             echo "ERROR: checksum not found for $ext_filename"
@@ -130,6 +141,17 @@ ext_file="$download_dir/$ext_filename"
 if [ -f $ext_file ]; then
     rm $ext_file
 fi
+
+# EXTENSION_HTTP_HEADERS usually carries credentials. It is read and written to
+# disk with xtrace disabled, and never assigned to a shell variable, so the
+# value reaches neither the container logs nor the process list. download_dir
+# is created by mktemp (mode 700) and removed by the finalizer trap.
+headers_file="$download_dir/.headers"
+{ set +x; } 2>/dev/null
+if [ -n "${EXTENSION_HTTP_HEADERS:-}" ]; then
+    printf '%s\n' "$EXTENSION_HTTP_HEADERS" > "$headers_file"
+fi
+set -x
 
 ext_vars="${EXTENSION_JS_VARS:-}"
 if [ -n "${ext_vars}" ]; then
