@@ -40,15 +40,24 @@ lookup_expected_checksum() {
     echo "$checksum_content" | awk -v f="$target_filename" '$2 == f {print $1; exit}'
 }
 
+# curl with the extra headers configured via EXTENSION_HTTP_HEADERS_FILE, if any.
+curl_with_headers() {
+    if [ -n "$headers_file" ]; then
+        curl -Lf -H "@$headers_file" "$@"
+    else
+        curl -Lf "$@"
+    fi
+}
+
 # will download the extension respecting the max download
 # duration setting
 download_extension() {
     mkdir -p $download_dir
     echo "Downloading the UI extension..."
-    curl -Lf --max-time $download_max_sec $ext_url -o $ext_file
+    curl_with_headers --max-time $download_max_sec $ext_url -o $ext_file
     if [ "$checksum_url" != "" ]; then
         echo "Validating the UI extension checksum..."
-        checksum_content=$(curl -Lf "$checksum_url")
+        checksum_content=$(curl_with_headers "$checksum_url")
         expected_sha=$(lookup_expected_checksum "$checksum_content" "$ext_filename")
         if [ -z "$expected_sha" ]; then
             echo "ERROR: checksum not found for $ext_filename"
@@ -123,6 +132,14 @@ if [ "$ext_url" = "" ]; then
 fi
 checksum_url="${EXTENSION_CHECKSUM_URL:-}"
 download_max_sec="${MAX_DOWNLOAD_SEC:-30}"
+
+# Extra HTTP headers, one "Name: value" pair per line, read from a mounted file
+# so that credentials are not carried in the environment.
+headers_file="${EXTENSION_HTTP_HEADERS_FILE:-}"
+if [ -n "$headers_file" ] && [ ! -f "$headers_file" ]; then
+    echo "error: EXTENSION_HTTP_HEADERS_FILE is set but $headers_file does not exist"
+    exit 1
+fi
 
 ext_filename=$(basename -- "$ext_url")
 download_dir=`mktemp -d -t extension-XXXXXX`

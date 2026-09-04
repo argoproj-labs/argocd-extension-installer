@@ -120,6 +120,51 @@ test_checksum_succeeds_when_sbom_sidecar_present() {
     fi
 }
 
+# Verify that the headers in EXTENSION_HTTP_HEADERS_FILE are actually sent on
+# the download request. A one-shot busybox nc listener inside the container
+# captures the raw request.
+test_http_headers_are_sent() {
+    output=$(docker run --rm --entrypoint sh argocd-extension-installer:test -c '
+        printf "Authorization: Bearer SENTINEL\nAccept: application/octet-stream\n" > /tmp/headers
+        { printf "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"; sleep 2; } \
+            | nc -l -p 18080 > /tmp/req.txt &
+        sleep 1
+        EXTENSION_NAME=test-ext \
+        EXTENSION_VERSION=v0.0.1 \
+        EXTENSION_URL=http://127.0.0.1:18080/extension.tar.gz \
+        EXTENSION_HTTP_HEADERS_FILE=/tmp/headers \
+        IGNORE_FAILURE=true \
+            ./install.sh >/dev/null 2>&1
+        wait
+        cat /tmp/req.txt
+    ' 2>&1)
+    echo "$output" | sed 's/^/    | /'
+    if echo "$output" | grep -q "Authorization: Bearer SENTINEL" &&
+       echo "$output" | grep -q "Accept: application/octet-stream"; then
+        pass "EXTENSION_HTTP_HEADERS_FILE: all headers are sent on the download request"
+    else
+        fail "EXTENSION_HTTP_HEADERS_FILE: all headers are sent on the download request" \
+             "request did not contain the configured headers"
+    fi
+}
+
+# A typo'd or unmounted EXTENSION_HTTP_HEADERS_FILE must fail loudly rather than
+# silently falling back to an unauthenticated request.
+test_http_headers_file_missing_fails() {
+    run_install \
+        EXTENSION_NAME=test-ext \
+        EXTENSION_URL=file:///home/ext-installer/testdata/extension.tar.gz \
+        EXTENSION_VERSION=test \
+        IGNORE_FAILURE=false \
+        EXTENSION_HTTP_HEADERS_FILE=/nonexistent/headers
+    if [ "$_last_exit" != "0" ] && echo "$output" | grep -q "does not exist"; then
+        pass "EXTENSION_HTTP_HEADERS_FILE: missing file fails with a clear error"
+    else
+        fail "EXTENSION_HTTP_HEADERS_FILE: missing file fails with a clear error" \
+             "expected non-zero exit and an error naming the missing file, got $_last_exit"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Harness
 # ---------------------------------------------------------------------------
