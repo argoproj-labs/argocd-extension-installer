@@ -54,7 +54,14 @@ curl_with_headers() {
 download_extension() {
     mkdir -p $download_dir
     echo "Downloading the UI extension..."
-    curl_with_headers --max-time $download_max_sec $ext_url -o $ext_file
+    set +x
+    if [ "$extension_proxy_username" != "" ] && [ "$extension_proxy_token" != "" ]; then
+      echo "Using proxy credentials to download the extension"
+       curl_with_headers --max-time $download_max_sec -u $extension_proxy_username:$extension_proxy_token $ext_url -o $ext_file
+      set -x
+    else
+      curl_with_headers --max-time $download_max_sec $ext_url -o $ext_file
+    fi
     if [ "$checksum_url" != "" ]; then
         echo "Validating the UI extension checksum..."
         checksum_content=$(curl_with_headers "$checksum_url")
@@ -127,6 +134,10 @@ fi
 
 ext_version="${EXTENSION_VERSION:-}"
 ext_url="${EXTENSION_URL:-}"
+extension_proxy_username="${EXTENSION_PROXY_USERNAME:-}"
+set +x
+extension_proxy_token="${EXTENSION_PROXY_TOKEN:-}"
+set -x
 if [ "$ext_url" = "" ]; then
     echo "error: the env var EXTENSION_URL must be provided"
     exit 1
